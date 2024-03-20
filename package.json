@@ -14,5 +14,8 @@
     "gulp-cssmin": "^0.1.7",
     "gulp-uglify": "^1.5.4",
     "pump": "^1.0.1"
+  },
+  "overrides": {
+    "graceful-fs": "^4.2.11"
   }
 }
