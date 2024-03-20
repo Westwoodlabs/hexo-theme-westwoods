@@ -4,6 +4,20 @@ Hexo theme for the [Westwoodlabs](https://westwoodlabs.de) website.
 
 The theme is a fork of the [Ghost Casper hexo port](https://github.com/kywk/hexo-theme-casper) from [Yu-Zhi Chen](https://github.com/kywk), which it self is a fork of the [Gost theme Casper](https://github.com/TryGhost/Casper).
 
+## Install dependencies
+
+```sh
+cd themes/westwoods
+npm install gulp
+```
+
+## Build theme
+
+```sh
+cd themes/westwoods
+gulp
+```
+
 ## Original Casper to Hexo port Copyright & License
 
 The MIT License (MIT)
@@ -26,7 +40,6 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 
 ## Original Casper Copyright & License
 
