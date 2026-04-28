@@ -1,0 +1,370 @@
+<style>
+/* ==========================================================================
+   Log / Timeline Page Styles
+   ========================================================================== */
+
+/* Timeline container — sits inside the standard article, adds left gutter for the line */
+.timeline {
+    position: relative;
+    padding: 1rem 0 2rem 2.8rem;
+}
+
+/* Vertical line on the LEFT */
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #121F2D;
+    z-index: 0;
+}
+
+/* Each timeline entry — full width, all to the right of the line */
+.timeline-entry {
+    position: relative;
+    margin-bottom: 3rem;
+}
+
+/* Dash on the line */
+.timeline-entry::before {
+    content: '';
+    position: absolute;
+    top: 1.9rem;
+    left: -2.6rem;
+    width: 1.6rem;
+    height: 4px;
+    background-color: #121F2D;
+    border-radius: 2px;
+    z-index: 1;
+}
+
+/* Date label */
+.timeline-date {
+    font-size: 1.8rem;
+    color: #121F2D;
+    margin-bottom: 0.8rem;
+    font-weight: bold;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+/* Card */
+.timeline-card {
+    background: #fff;
+    border: 1px solid #EBF2F6;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
+/* Image wrapper — natural image height */
+.timeline-img-wrapper {
+    width: 100%;
+    background: #EBF2F6;
+    position: relative;
+    overflow: hidden;
+    display: block;
+}
+
+.timeline-img-placeholder {
+    color: #9EABB3;
+    font-size: 3rem;
+    line-height: 1;
+    user-select: none;
+}
+
+/* Lazy-loaded image: starts invisible, fades in on load */
+.timeline-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    cursor: zoom-in;
+}
+
+.timeline-img.loaded {
+    opacity: 1;
+}
+
+/* Author credit — bottom-right of image */
+.timeline-img-author {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.7rem;
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(0, 0, 0, 0.45);
+    padding: 0.15rem 0.55rem;
+    border-radius: 3px;
+    pointer-events: none;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+/* Fullscreen lightbox */
+#timeline-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    cursor: zoom-out;
+}
+
+#timeline-lightbox.active {
+    display: flex;
+}
+
+#timeline-lightbox img {
+    max-width: 95vw;
+    max-height: 95vh;
+    object-fit: contain;
+    box-shadow: 0 4px 40px rgba(0, 0, 0, 0.6);
+    cursor: default;
+}
+
+#timeline-lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    color: #fff;
+    font-size: 3rem;
+    line-height: 1;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+/* Description text */
+.timeline-description {
+    padding: 1rem 1.4rem 1.2rem;
+    font-size: 1.6rem;
+    color: #3A4145;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Sentinel / loading spinner */
+#timeline-sentinel {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.timeline-loading {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #EBF2F6;
+    border-top-color: #121F2D;
+    border-radius: 50%;
+    animation: timeline-spin 0.8s linear infinite;
+}
+
+@keyframes timeline-spin {
+    to { transform: rotate(360deg); }
+}
+
+.timeline-end-msg {
+    color: #9EABB3;
+    font-size: 1.4rem;
+}
+</style>
+
+<main class="content">
+    <article class="post">
+        <h1 class="post-title"><%- page.title %></h1>
+
+        <div class="timeline" id="timeline-container"></div>
+
+        <div id="timeline-lightbox" role="dialog" aria-modal="true">
+            <button id="timeline-lightbox-close" aria-label="Schließen">&times;</button>
+            <img id="timeline-lightbox-img" src="" alt="" />
+        </div>
+
+        <div id="timeline-sentinel">
+            <span class="timeline-loading" id="timeline-spinner" aria-label="Wird geladen…"></span>
+        </div>
+    </article>
+</main>
+
+<script>
+(function () {
+    'use strict';
+
+    var LOG_DATA = <%- JSON.stringify(site.data.log) %>;
+    var ROOT     = '<%- config.root %>';
+
+    var container = document.getElementById('timeline-container');
+    var sentinel  = document.getElementById('timeline-sentinel');
+    var spinner   = document.getElementById('timeline-spinner');
+
+    var PAGE_SIZE    = 8;
+    var currentIndex = 0;
+    var loading      = false;
+
+    /* ── Sort newest first ── */
+    LOG_DATA.sort(function (a, b) {
+        return new Date(b.date) - new Date(a.date);
+    });
+
+    /* ── Date formatter: DD.MM.YYYY HH:MM ── */
+    function formatDate(dateStr) {
+        var d   = new Date(dateStr);
+        var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+        return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+             + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    /* ── Build a single timeline entry DOM node ── */
+    function createEntry(item, index) {
+        var entry = document.createElement('div');
+        entry.className = 'timeline-entry';
+
+        /* Date label */
+        var dateEl = document.createElement('div');
+        dateEl.className   = 'timeline-date';
+        dateEl.textContent = formatDate(item.date);
+
+        /* Card */
+        var card = document.createElement('div');
+        card.className = 'timeline-card';
+
+        /* Optional image */
+        if (item.image) {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'timeline-img-wrapper';
+
+            var placeholder = document.createElement('span');
+            placeholder.className   = 'timeline-img-placeholder';
+            placeholder.textContent = '📷';
+            placeholder.setAttribute('aria-hidden', 'true');
+            wrapper.appendChild(placeholder);
+
+            /* Build thumb URL: images/log/thumbs/<file> */
+            var imgParts  = item.image.split('/');
+            imgParts.splice(imgParts.length - 1, 0, 'thumbs');
+            var thumbSrc  = ROOT + 'images/' + imgParts.join('/');
+            var origSrc   = ROOT + 'images/' + item.image;
+
+            var img = document.createElement('img');
+            img.className = 'timeline-img';
+            img.alt       = item.description || '';
+            img.loading   = 'lazy';
+            img.src       = thumbSrc;
+            img.setAttribute('data-full', origSrc);
+
+            img.addEventListener('load', function () {
+                img.classList.add('loaded');
+                placeholder.style.display = 'none';
+            });
+            img.addEventListener('error', function () {
+                wrapper.style.display = 'none';
+            });
+
+            /* Open lightbox with full-size original on click */
+            img.addEventListener('click', function () {
+                openLightbox(img.getAttribute('data-full'), img.alt);
+            });
+
+            wrapper.appendChild(img);
+
+            /* Author credit */
+            if (item.author) {
+                var authorEl = document.createElement('span');
+                authorEl.className   = 'timeline-img-author';
+                authorEl.textContent = 'Bild von ' + item.author;
+                wrapper.appendChild(authorEl);
+            }
+
+            card.appendChild(wrapper);
+        }
+
+        /* Description */
+        if (item.description) {
+            var desc = document.createElement('p');
+            desc.className   = 'timeline-description';
+            desc.textContent = item.description;
+            card.appendChild(desc);
+        }
+
+        entry.appendChild(dateEl);
+        entry.appendChild(card);
+        return entry;
+    }
+
+    /* ── Render the next page of entries ── */
+    function loadMore() {
+        if (loading || currentIndex >= LOG_DATA.length) {
+            return;
+        }
+        loading = true;
+
+        var fragment = document.createDocumentFragment();
+        var end      = Math.min(currentIndex + PAGE_SIZE, LOG_DATA.length);
+
+        for (var i = currentIndex; i < end; i++) {
+            fragment.appendChild(createEntry(LOG_DATA[i], i));
+        }
+
+        container.appendChild(fragment);
+        currentIndex = end;
+        loading      = false;
+
+        if (currentIndex >= LOG_DATA.length) {
+            var msg = document.createElement('p');
+            msg.className   = 'timeline-end-msg';
+            msg.textContent = '– Ende des Logs –';
+            sentinel.innerHTML = '';
+            sentinel.appendChild(msg);
+        }
+    }
+
+    /* ── Infinite scroll via IntersectionObserver on the sentinel ── */
+    var scrollObserver = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting) {
+            loadMore();
+        }
+    }, { rootMargin: '400px 0px' });
+
+    scrollObserver.observe(sentinel);
+
+    /* ── Lightbox ── */
+    var lightbox     = document.getElementById('timeline-lightbox');
+    var lightboxImg  = document.getElementById('timeline-lightbox-img');
+    var lightboxClose = document.getElementById('timeline-lightbox-close');
+
+    function openLightbox(src, alt) {
+        lightboxImg.src = src;
+        lightboxImg.alt = alt || '';
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+        lightbox.classList.remove('active');
+        lightboxImg.src = '';
+        document.body.style.overflow = '';
+    }
+
+    lightboxClose.addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) {
+            closeLightbox();
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+            closeLightbox();
+        }
+    });
+
+    /* ── Initial render ── */
+    loadMore();
+}());
+</script>
